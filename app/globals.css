@@ -1,39 +1,53 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #ffffff;
+  --fg: #000000;
+  --muted: #979797;
+  --faded: #cfcfcf; /* sidebar text when an article is open */
+  --line: #e1e1e1;
+  --faint: #ebebeb;
+  --highlight: #efeafc;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+
+  --text: 14px;
+  /* Titles are the same size as the body and separate themselves by color
+     alone. Bump this if you want an explicit size hierarchy. */
+  --text-title: 14px;
+  --leading: 22px;
+  --tracking: 0.4px;
+
+  --shell: 1000px;
+  --sidebar: 372px;
+  --article: 618px;
+  --gutter: 10px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--text);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
+p {
   margin: 0;
 }
 
@@ -42,8 +56,421 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+img {
+  max-width: 100%;
+}
+
+/* ---------------------------------------------------------------
+   Shell — two centered columns, one document scroll.
+   --------------------------------------------------------------- */
+.shell {
+  display: flex;
+  justify-content: center;
+  gap: var(--gutter);
+  width: 100%;
+  max-width: var(--shell);
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+/* Reading an entry: the pair shifts left so the article has the right half. */
+.shell[data-reading="true"] {
+  justify-content: flex-start;
+}
+
+/* ---------------------------------------------------------------
+   Sidebar
+   --------------------------------------------------------------- */
+.sidebar {
+  flex: 0 0 var(--sidebar);
+  width: var(--sidebar);
+  padding: 100px 32px 20px;
+  border-left: 0.5px solid var(--line);
+  border-right: 0.5px solid var(--line);
+  transition: opacity 300ms ease;
+}
+
+.avatar {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 20px;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.intro {
+  margin-top: 22px;
+  color: var(--muted);
+  transition: color 300ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/*
+ * Inline links inside the bio: underlined on hover only, like the reference.
+ * Deliberately no `color` transition here — the color is inherited from .intro,
+ * and a transition on an inherited value chases the parent's own animation
+ * instead of matching it, which reads as the links lagging behind the text
+ * around them. The underline carries the hover affordance instead.
+ */
+.intro a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 150ms ease;
+}
+
+.intro a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------------------------------------------------------------
+   Reading state — the index recedes so the article carries focus,
+   and comes back in full the moment you point at the column.
+   Both the wash (opacity) and the text colors are keyed off :hover,
+   so hovering restores the sidebar to exactly its home appearance.
+   --------------------------------------------------------------- */
+/*
+ * Only where a pointer can hover. On a touch screen there is no way to
+ * bring the column back, so it stays at full strength rather than being
+ * stranded at 40%.
+ */
+@media (hover: hover) {
+  .sidebar[data-reading="true"] {
+    opacity: 0.4;
+  }
+
+  .sidebar[data-reading="true"]:hover {
+    opacity: 1;
+  }
+
+  .sidebar[data-reading="true"]:not(:hover) .intro,
+  .sidebar[data-reading="true"]:not(:hover) .entry-title,
+  .sidebar[data-reading="true"]:not(:hover) .entry-year,
+  .sidebar[data-reading="true"]:not(:hover) .entry-date {
+    color: var(--faded);
+  }
+
+  /* The entry you are reading stays a step darker than the rest, so the
+     column still says where you are while it is washed back. */
+  .sidebar[data-reading="true"]:not(:hover) .entry[data-active="true"] .entry-title {
+    color: var(--muted);
+  }
+}
+
+/* ---------------------------------------------------------------
+   Hover reveal — a highlighted term swaps the line around it for a
+   note about that term.
+
+   Both layers occupy one grid cell so they cross-fade in place. The
+   reveal layer repeats the leading text as a hidden ghost purely for
+   measurement: that is what stops the chip drifting sideways as the
+   layers swap.
+   --------------------------------------------------------------- */
+.hl {
+  display: grid;
+  grid-template-areas: "stack";
+  text-wrap: pretty;
+}
+
+.hl-layer {
+  grid-area: stack;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.hl-reveal {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hl[data-open="true"] .hl-reveal {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hl-text {
+  display: inline;
+  transition: opacity 540ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 540ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hl[data-open="true"] .hl-original .hl-text {
+  opacity: 0.18;
+  filter: blur(4px);
+  transition-duration: 680ms;
+  transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* Reserves the same width as the leading text without painting it. */
+.hl-ghost {
+  visibility: hidden;
+}
+
+.hl-word {
+  opacity: 0;
+}
+
+.hl[data-open="true"] .hl-word {
+  animation: word-appear 500ms ease-out calc(var(--word-index) * 80ms) both;
+}
+
+@keyframes word-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hl-trigger {
+  display: inline-block;
+  background: var(--highlight);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 0.12em;
+  text-decoration: none;
+  vertical-align: baseline;
+  box-shadow: inset 0 -1px rgba(0, 0, 0, 0.06);
+}
+
+.hl-trigger:focus-visible {
+  outline: 1px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* Highlighted inline text — used for where you work now. */
+.highlight {
+  background: var(--highlight);
+  color: inherit;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin: 0 -1px;
+  /* Keeps the chip intact when it wraps across two lines. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* ---------------------------------------------------------------
+   Entry index
+   --------------------------------------------------------------- */
+.entries {
+  margin-top: 46px;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 16px 0;
+  border-top: 0.5px solid var(--line);
+}
+
+.entry-year {
+  flex: 0 0 44px;
+  transition: color 300ms ease;
+  font-size: var(--text);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.entry-title {
+  flex: 1 1 auto;
+  color: var(--fg);
+  transition: color 300ms ease;
+}
+
+.entry-date {
+  flex: 0 0 auto;
+  font-size: var(--text);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  transition: color 150ms ease;
+}
+
+a.entry:hover .entry-title {
+  color: var(--muted);
+}
+
+a.entry:hover .entry-date {
+  color: var(--fg);
+}
+
+/* In-progress entries are not links. */
+.entry[data-wip="true"] .entry-title {
+  color: var(--muted);
+}
+
+.entry:focus-visible {
+  outline: 1px solid var(--fg);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------
+   Dots — the in-progress marker.
+   --------------------------------------------------------------- */
+.dots {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 8px;
+}
+
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 30px;
+  background: var(--line);
+  animation: dot-jump 1200ms ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  background: var(--faint);
+  animation-delay: 160ms;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 320ms;
+}
+
+@keyframes dot-jump {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+
+  /* Motion's own animations are handled by MotionConfig reducedMotion="user";
+     these are the CSS-driven ones. */
+  .hl-text {
+    filter: none;
+    transition-duration: 120ms;
+  }
+
+  .hl[data-open="true"] .hl-word {
+    opacity: 1;
+    animation: none;
+  }
+
+  .sidebar,
+  .intro,
+  .intro a,
+  .entry-title,
+  .entry-year,
+  .entry-date {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Article
+   --------------------------------------------------------------- */
+.article-slot {
+  flex: 0 0 var(--article);
+  width: var(--article);
+}
+
+.article {
+  width: 100%;
+  /* Matches the sidebar's 32px inset, so both columns share one gutter. */
+  padding: 100px 32px 120px;
+}
+
+.article-title {
+  margin: 0;
+  font-size: var(--text-title);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.article-date {
+  color: var(--muted);
+}
+
+.article-body {
+  margin-top: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  color: var(--muted);
+}
+
+.article-heading {
+  margin: 22px 0 0;
+  font-size: var(--text-title);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.back {
+  display: none;
+}
+
+/* ---------------------------------------------------------------
+   Mobile — single column, article as its own page.
+   --------------------------------------------------------------- */
+@media (max-width: 809.98px) {
+  .shell {
+    display: block;
+    max-width: none;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex: none;
+    padding: 56px 24px 40px;
+    border-left: none;
+    border-right: none;
+  }
+
+  .article-slot {
+    width: 100%;
+    flex: none;
+  }
+
+  .article {
+    width: 100%;
+    padding: 56px 24px 80px;
+  }
+
+  /* On an article route the index steps out of the way entirely. */
+  .shell[data-reading="true"] .sidebar {
+    display: none;
+  }
+
+  .back {
+    display: block;
+    margin-top: 44px;
+    color: var(--muted);
   }
 }
