@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { profile } from "@/content/profile";
@@ -8,17 +7,20 @@ import EntryList from "./EntryList";
 import HighlightReveal from "./HighlightReveal";
 import RichText, { parseReveal } from "./RichText";
 
+/**
+ * Deliberately not a Motion component. The slide between the centered home
+ * position and the left-hand reading position is a plain CSS transform
+ * transition (see `--shift` in globals.css).
+ *
+ * Motion's `layout` was doing that job, but it measures positions and cannot
+ * be reconciled with `position: sticky` — the measured before/after are taken
+ * in different scroll frames, and the animation strands a residual transform,
+ * leaving the column stuck on one side. The offset here is a known constant,
+ * (shell 1000px − sidebar 372px) / 2, so there is nothing to measure.
+ */
 export default function Sidebar({ activeSlug }: { activeSlug?: string }) {
   return (
-    // `layout` is what animates the slide from center to left: Motion measures
-    // the element before and after the flex alignment changes and tweens the
-    // difference as a transform.
-    <motion.aside
-      className="sidebar"
-      data-reading={Boolean(activeSlug)}
-      layout
-      transition={{ duration: 0.5, ease: [0.32, 0.72, 0, 1] }}
-    >
+    <aside className="sidebar" data-reading={Boolean(activeSlug)}>
       <Link href="/" aria-label={`${profile.name} — home`}>
         <Image
           className="avatar"
@@ -47,6 +49,6 @@ export default function Sidebar({ activeSlug }: { activeSlug?: string }) {
       </div>
 
       <EntryList activeSlug={activeSlug} />
-    </motion.aside>
+    </aside>
   );
 }

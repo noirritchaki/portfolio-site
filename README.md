@@ -43,6 +43,37 @@ Entries render in array order, so put the newest first.
 
 Replace `public/avatar.jpg`. It renders at 56×56, cropped to a circle.
 
+## Long-form pieces
+
+Short entries stay as `body: string[]`. Anything with real structure uses
+`blocks` instead — a tagged union defined in `content/blocks.ts` and rendered by
+`components/ArticleBlocks.tsx`. The Health Checkup case study
+(`content/health-checkup.ts`) uses 21 of them: section markers, cards, quotes,
+figure grids, a reframe diagram, a numbered spine, a severity table, a range
+specimen, and so on.
+
+To add a block type: add a variant to the union in `content/blocks.ts`, a
+`case` in `ArticleBlocks.tsx`, and its styles in `app/globals.css`. Add the type
+to the `WIDE` set at the top of `ArticleBlocks.tsx` if it should break out of
+the text measure.
+
+### Review mode
+
+Open a piece with `?review` — e.g. `/writing/health-checkup?review` — to paint
+the `~~assumption marks~~` and reveal the appendix block listing what still
+needs verifying. Both are invisible without it.
+
+**This hides things from a casual reader; it does not make them private.**
+Review content is in the page source either way. If it must not ship at all,
+gate the `appendix` case in `ArticleBlocks.tsx` on
+`process.env.NODE_ENV === "development"`, which strips it from `next build`.
+
+### Figures
+
+Figure slots render as dashed placeholders showing where the artwork comes
+from. Export the image, drop it in `public/`, and set `src` on that figure in
+the content file — the placeholder is replaced.
+
 ## Fonts
 
 **Inter** throughout, loaded from Google Fonts via `next/font`, which self-hosts
@@ -83,27 +114,41 @@ The same markup works in article bodies in `content/entries.ts`.
 The home page centers the column in the viewport. Opening an entry slides the
 column left and dissolves the article in on the right; going back reverses it.
 
-This is why the structure is slightly unusual: **the sidebar lives in
-`components/Shell.tsx`, mounted once from `app/layout.tsx`**, rather than being
-rendered by each page. It has to survive navigation for Motion to animate it —
-if each route rendered its own copy it would unmount and re-mount, and there
-would be nothing to tween. `app/page.tsx` therefore renders `null`; the home
-page *is* the shell with no article beside it.
+The sidebar lives in `components/Shell.tsx`, mounted once from
+`app/layout.tsx`, so it survives navigation. `app/page.tsx` renders `null` —
+the home page *is* the shell with no article beside it. `Shell` reads the
+current path to decide whether it is in the reading state, so adding routes
+needs no wiring.
 
-`Shell` reads the current path to decide whether it's in the reading state, so
-adding routes needs no wiring. The two animations:
+### Scrolling
 
-- **The slide** — `layout` on the sidebar in `components/Sidebar.tsx`. Motion
-  measures the element either side of the flex realignment and tweens the
-  difference. 500ms, both directions.
-  The `LayoutGroup` wrapper in `Shell` is load-bearing for the return trip:
-  going in, the article mounts in the same commit that re-renders the sidebar,
-  so the shift is measured for free. Coming back, the article is removed later —
-  once its fade-out finishes — in a commit that does not re-render the sidebar,
-  so without `LayoutGroup` there is nothing to measure and it snaps to center.
+The index is its own scroll target: `position: sticky` with `height: 100dvh`
+and its own `overflow-y`. It stays put while the article scrolls the document
+past it, and scrolls only itself when its content is taller than the window
+(`overscroll-behavior: contain` stops that chaining to the page).
+
+It is sticky rather than a second overflow container on the article side,
+because `overflow-y: auto` there computes `overflow-x` to `auto` as well, which
+would clip the `.bleed` blocks that deliberately extend past the column.
+
+### The two animations
+
+- **The slide** — a plain CSS transform transition on `--shift` in
+  `app/globals.css`, 500ms. The offset is a known constant, half the difference
+  between the 1000px shell and the 372px column, so nothing needs measuring.
+  It is deliberately *not* a Motion `layout` animation: that measures positions
+  before and after, which cannot be reconciled with `position: sticky` — the
+  measurements come from different scroll frames and the animation strands a
+  residual transform, leaving the column stuck on one side.
 - **The dissolve** — `AnimatePresence` in `Shell`, keyed on the pathname, so
   moving between two articles cross-fades too. It waits ~220ms so the article
   appears once the column has mostly settled rather than sliding with it.
+  `mode="popLayout"` matters: it takes the exiting article out of the flow
+  while it fades. Under the default mode it stays a flex child until the fade
+  finishes, so the shell stays full, the sidebar cannot re-centre, and the
+  invisible slot sits on top of the index swallowing clicks on the right-hand
+  half of every row. The `pointer-events: none` rule on a non-reading
+  `.article-slot` is the belt to that braces.
 
 While an article is open the column washes back to 40% and its text drops to
 the faintest grey; hovering anywhere over it restores it to exactly its home
@@ -112,8 +157,9 @@ the column still says where you are. That behavior sits behind a
 `@media (hover: hover)` guard — on a touch screen there is no way to bring the
 column back, so it stays at full strength.
 
-Both animations respect `prefers-reduced-motion` (via `MotionConfig reducedMotion="user"`
-for Motion, and a media query in `app/globals.css` for the CSS fades).
+Both animations respect `prefers-reduced-motion` (via `MotionConfig
+reducedMotion="user"` for Motion, and a media query in `app/globals.css` for
+the CSS transitions).
 
 ## Design tokens
 

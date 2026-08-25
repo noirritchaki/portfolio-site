@@ -1,20 +1,29 @@
 import type { ReactNode } from "react";
 
 /**
- * A deliberately tiny inline formatter, so bio and article copy can stay as
- * plain strings in content/ rather than turning into JSX.
+ * A deliberately tiny inline formatter, so copy can stay as plain strings in
+ * content/ rather than turning into JSX.
  *
- *   [label](https://url)   → link (underlines on hover)
- *   [label](mailto:…)      → link, not opened in a new tab
+ *   [label](https://url)   → link
  *   ==label==              → highlighted chip
+ *   ~~label~~              → assumption mark, only painted in review mode
+ *   **label**              → bold
+ *   *label*                → italic
  *
- * The two combine, which is the usual case for a current employer:
+ * A chip and a link combine, which is the usual case for a current employer:
  *
  *   ==[Company](https://company.com)==
+ *
+ * A chip may also carry a {note}, which turns the whole paragraph into a hover
+ * reveal — see parseReveal below and components/HighlightReveal.tsx.
  */
 
-const LINK = /\[([^\]]+)\]\(([^)]+)\)/g;
-const MARK = /==(.+?)==/g;
+const LINK = /\[([^\]]+)\]\(([^)]+)\)/;
+const MARK = /==(.+?)==/;
+const ASSUMPTION = /~~(.+?)~~/;
+const BOLD = /\*\*(.+?)\*\*/;
+const ITALIC = /\*(.+?)\*/;
+
 /** ==[Label](url)=={note} — the note is what appears on hover. */
 const REVEAL = /==\[([^\]]+)\]\(([^)]+)\)==\{([^}]+)\}/;
 
@@ -39,64 +48,86 @@ export function parseReveal(text: string) {
 /** The same copy with its markup removed — for metadata, alt text, etc. */
 export function stripMarkup(text: string) {
   return text
-    .replace(REVEAL, "$1")
-    .replace(MARK, "$1")
-    .replace(LINK, "$1");
+    .replace(new RegExp(REVEAL.source, "g"), "$1")
+    .replace(new RegExp(MARK.source, "g"), "$1")
+    .replace(new RegExp(ASSUMPTION.source, "g"), "$1")
+    .replace(new RegExp(BOLD.source, "g"), "$1")
+    .replace(new RegExp(ITALIC.source, "g"), "$1")
+    .replace(new RegExp(LINK.source, "g"), "$1");
 }
 
-function withLinks(text: string, key: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const re = new RegExp(LINK.source, "g");
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let i = 0;
+type Pattern = {
+  re: RegExp;
+  /** Which capture group holds content that may itself contain markup. */
+  inner: number;
+  wrap: (children: ReactNode, match: RegExpExecArray, key: string) => ReactNode;
+};
 
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > last) nodes.push(text.slice(last, match.index));
+/* Order matters: bold before italic, or ** is eaten one asterisk at a time. */
+const PATTERNS: Pattern[] = [
+  {
+    re: MARK,
+    inner: 1,
+    wrap: (children, _m, key) => (
+      <mark className="highlight" key={key}>
+        {children}
+      </mark>
+    ),
+  },
+  {
+    re: ASSUMPTION,
+    inner: 1,
+    wrap: (children, _m, key) => (
+      <span className="asm" key={key}>
+        {children}
+      </span>
+    ),
+  },
+  {
+    re: BOLD,
+    inner: 1,
+    wrap: (children, _m, key) => <strong key={key}>{children}</strong>,
+  },
+  {
+    re: ITALIC,
+    inner: 1,
+    wrap: (children, _m, key) => <em key={key}>{children}</em>,
+  },
+  {
+    re: LINK,
+    inner: 1,
+    wrap: (children, match, key) => {
+      const href = match[2];
+      const external = href.startsWith("http");
 
-    const [full, label, href] = match;
-    const external = href.startsWith("http");
+      return (
+        <a
+          key={key}
+          href={href}
+          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+        >
+          {children}
+        </a>
+      );
+    },
+  },
+];
 
-    nodes.push(
-      <a
-        key={`${key}-${i++}`}
-        href={href}
-        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-      >
-        {label}
-      </a>,
-    );
+function parse(text: string, key: string): ReactNode[] {
+  for (const pattern of PATTERNS) {
+    const match = pattern.re.exec(text);
+    if (!match) continue;
 
-    last = match.index + full.length;
+    return [
+      ...parse(text.slice(0, match.index), `${key}b`),
+      pattern.wrap(parse(match[pattern.inner], `${key}i`), match, `${key}w`),
+      ...parse(text.slice(match.index + match[0].length), `${key}a`),
+    ];
   }
 
-  if (last < text.length) nodes.push(text.slice(last));
-  return nodes;
+  return text ? [text] : [];
 }
 
 export default function RichText({ text }: { text: string }) {
-  const nodes: ReactNode[] = [];
-  const re = new RegExp(MARK.source, "g");
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let i = 0;
-
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > last) {
-      nodes.push(...withLinks(text.slice(last, match.index), `t${i}`));
-    }
-
-    nodes.push(
-      <mark className="highlight" key={`m${i}`}>
-        {withLinks(match[1], `m${i}`)}
-      </mark>,
-    );
-
-    last = match.index + match[0].length;
-    i++;
-  }
-
-  if (last < text.length) nodes.push(...withLinks(text.slice(last), `t${i}`));
-
-  return <>{nodes}</>;
+  return <>{parse(text, "t")}</>;
 }

@@ -7,6 +7,15 @@
   --faint: #ebebeb;
   --highlight: #efeafc;
 
+  /* Severity. Colour is never the only channel — every level also has a word
+     and a position on the range. */
+  --good: #2e6f52;
+  --good-bg: #e7f1ec;
+  --watch: #9c6a16;
+  --watch-bg: #f7eedc;
+  --alert: #ac3535;
+  --alert-bg: #f8e8e8;
+
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     sans-serif;
 
@@ -64,8 +73,9 @@ img {
    Shell — two centered columns, one document scroll.
    --------------------------------------------------------------- */
 .shell {
+  position: relative; /* anchor for the exiting article, see Shell.tsx */
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--gutter);
   width: 100%;
   max-width: var(--shell);
@@ -73,21 +83,66 @@ img {
   min-height: 100vh;
 }
 
-/* Reading an entry: the pair shifts left so the article has the right half. */
-.shell[data-reading="true"] {
-  justify-content: flex-start;
+/*
+ * The slide between home and reading.
+ *
+ * At home the column is centered; opening an entry moves it left so the
+ * article takes the right half. The offset is a known constant — half the
+ * difference between the 1000px shell and the 372px column — so this is a
+ * plain transform transition rather than a measured layout animation. That
+ * matters because the sidebar is `position: sticky`, which measurement-based
+ * animation cannot handle: see the note in components/Sidebar.tsx.
+ */
+.sidebar {
+  --shift: calc((var(--shell) - var(--sidebar)) / 2);
+  transform: translateX(var(--shift));
+}
+
+.shell[data-reading="true"] .sidebar {
+  --shift: 0px;
+}
+
+/*
+ * An article on its way out is absolutely positioned by popLayout and fades to
+ * nothing, but it stays mounted and would otherwise keep taking clicks — it
+ * overlaps the right-hand half of the index, dates included.
+ */
+.shell:not([data-reading="true"]) .article-slot {
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------
    Sidebar
    --------------------------------------------------------------- */
+/*
+ * The index is its own scroll target: pinned to the viewport, scrolling only
+ * itself when its content is taller than the window. The article scrolls the
+ * document past it.
+ *
+ * Sticky rather than a second overflow container on the article side, because
+ * `overflow-y: auto` there would compute overflow-x to `auto` as well and clip
+ * the .bleed blocks that deliberately extend past the column.
+ */
 .sidebar {
   flex: 0 0 var(--sidebar);
   width: var(--sidebar);
   padding: 100px 32px 20px;
   border-left: 0.5px solid var(--line);
   border-right: 0.5px solid var(--line);
-  transition: opacity 300ms ease;
+  transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 300ms ease;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 .avatar {
@@ -378,7 +433,10 @@ a.entry:hover .entry-date {
     animation: none;
   }
 
-  .sidebar,
+  .sidebar {
+    transition: none;
+  }
+
   .intro,
   .intro a,
   .entry-title,
@@ -415,12 +473,27 @@ a.entry:hover .entry-date {
   color: var(--muted);
 }
 
+/* Two tracks: text sits on a comfortable measure, wide blocks break out into
+   the full column. */
 .article-body {
   margin-top: 44px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+  display: grid;
+  grid-template-columns:
+    [content-start] minmax(0, 520px) [content-end]
+    minmax(0, 1fr) [bleed-end];
+  row-gap: 22px;
   color: var(--muted);
+}
+
+.article-body > * {
+  grid-column: content-start / content-end;
+  min-width: 0;
+}
+
+.article-body > .bleed {
+  grid-column: content-start / bleed-end;
+  width: clamp(554px, calc(50vw + 62px), 860px);
+  max-width: none;
 }
 
 .article-heading {
@@ -436,10 +509,606 @@ a.entry:hover .entry-date {
   display: none;
 }
 
+
+/* ---------------------------------------------------------------
+   Long-form blocks — see components/ArticleBlocks.tsx.
+
+   Translated from the source document rather than imported: its serif
+   display face, rounded cards and drop shadows are dropped in favour of
+   this site's flat hairlines and single 14px type size.
+   --------------------------------------------------------------- */
+
+/* The source leaned on a mono face for its small-caps labels. There is no
+   mono face here, so Inter does the same job with tracking. */
+.article .label {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.article .lede {
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--fg);
+}
+
+.block-heading {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: var(--tracking);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.block-subheading {
+  margin: 0;
+  font-size: var(--text);
+  line-height: var(--leading);
+  letter-spacing: var(--tracking);
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.article strong {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.article .note {
+  color: var(--muted);
+}
+
+.article .footnote {
+  color: var(--faded);
+}
+
+/* Section start: hairline, label, and a dot tracking progress through the
+   piece. Doubles as the section divider, so no separate rule is needed. */
+.block-marker {
+  margin-top: 34px;
+  padding-top: 34px;
+  border-top: 0.5px solid var(--line);
+}
+
+.marker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.marker-label {
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.marker .rail {
+  position: relative;
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.marker .rail i {
+  position: absolute;
+  top: -2px;
+  /* Scaled across the rail less the dot's own width, so 100% sits flush
+     inside the rail rather than hanging off the end. */
+  left: calc(var(--progress) * (100% - 5px) / 100);
+  width: 5px;
+  height: 5px;
+  background: var(--fg);
+  border-radius: 1px;
+}
+
+/* The wall of values behind the opening. */
+.wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  font-size: 11px;
+  line-height: 20px;
+  color: var(--fg);
+  opacity: 0.16;
+  user-select: none;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 96%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 96%);
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.wall b {
+  font-weight: 400;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 16px 24px;
+  padding-top: 20px;
+  border-top: 0.5px solid var(--line);
+}
+
+.meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta span {
+  color: var(--fg);
+}
+
+.card,
+.appendix {
+  border: 0.5px solid var(--line);
+  padding: 20px;
+}
+
+.appendix {
+  background: var(--bg);
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 0.5px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article blockquote {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--fg);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--fg);
+}
+
+.article blockquote cite {
+  display: block;
+  margin-top: 10px;
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Figures. The dashed slot is a placeholder until real exports land — set
+   `src` on the figure in content/ and it is replaced by the image. */
+.figs {
+  display: grid;
+  gap: 20px;
+}
+
+.figs-two {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.figs-three {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.article figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+  min-height: 120px;
+  border: 1px dashed var(--line);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--faint) 0 7px,
+    transparent 7px 14px
+  );
+}
+
+.slot-tall {
+  aspect-ratio: 9 / 16;
+}
+
+.slot-wide {
+  aspect-ratio: 16 / 9;
+}
+
+.slot-squat {
+  aspect-ratio: 5 / 2;
+}
+
+.slot code {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 0.5px solid var(--line);
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+}
+
+.fig-img {
+  width: 100%;
+  height: auto;
+  border: 0.5px solid var(--line);
+}
+
+.article figcaption {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.pills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pills li {
+  font-style: italic;
+  color: var(--fg);
+  border: 0.5px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+/* Stacked: the old taxonomy above, the questions it became below. */
+.reframe {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.reframe-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reframe-side .label {
+  margin-bottom: 4px;
+}
+
+.tag {
+  display: block;
+  font-size: 13px;
+  line-height: 20px;
+  padding: 6px 10px;
+  border: 0.5px solid var(--line);
+  color: var(--muted);
+}
+
+.tag-on {
+  border-color: var(--fg);
+  color: var(--fg);
+  background: var(--highlight);
+}
+
+.tag em {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.reframe-arrow {
+  color: var(--muted);
+  text-align: center;
+  transform: rotate(90deg);
+}
+
+.principles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Direct children only — a nested example list must not inherit the row
+   padding, hairline and column flex meant for the principles themselves. */
+.principles > li {
+  padding: 18px 0;
+  border-top: 0.5px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.principles > li:last-child {
+  border-bottom: 0.5px solid var(--line);
+}
+
+.killed {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+/* A badge, so what a principle rejected reads as a verdict — but in the same
+   tinted register as the severity chips, not a solid block of red. */
+.killed b {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--alert-bg);
+  color: var(--alert);
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+/* Short worked examples under a principle. */
+.principle-list {
+  list-style: none;
+  margin: 2px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.principle-list li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+
+.principle-list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.spine {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: spine;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spine li {
+  counter-increment: spine;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+}
+
+.spine li::before {
+  content: counter(spine, decimal-leading-zero);
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.spine b,
+.beats b {
+  font-weight: 400;
+  color: var(--fg);
+}
+
+.spine span,
+.beats span,
+.metrics span {
+  color: var(--muted);
+}
+
+.beats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.5px;
+  background: var(--line);
+  border: 0.5px solid var(--line);
+}
+
+.beats li {
+  background: var(--bg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.beats span {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.metrics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.metrics li {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--line);
+}
+
+.metrics li:first-child {
+  border-top: 0.5px solid var(--line);
+}
+
+.metrics b {
+  flex: none;
+  width: 80px;
+  font-weight: 400;
+  color: var(--fg);
+  padding-top: 2px;
+}
+
+.tablewrap {
+  overflow-x: auto;
+  border: 0.5px solid var(--line);
+}
+
+.article table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+}
+
+.article th,
+.article td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--line);
+  vertical-align: top;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.article tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.article td:first-child {
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.chip-good {
+  color: var(--good);
+  background: var(--good-bg);
+}
+
+.chip-watch {
+  color: var(--watch);
+  background: var(--watch-bg);
+}
+
+.chip-alert {
+  color: var(--alert);
+  background: var(--alert-bg);
+}
+
+.range {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.range .track {
+  position: relative;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--watch-bg) 0 18%,
+    var(--good-bg) 18% 72%,
+    var(--alert-bg) 72% 100%
+  );
+}
+
+.range .track i {
+  position: absolute;
+  top: -4px;
+  left: calc(var(--progress) * (100% - 2px) / 100);
+  width: 2px;
+  height: 13px;
+  background: var(--fg);
+}
+
+.range .ends {
+  display: flex;
+  justify-content: space-between;
+}
+
+.appendix ol {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ---------------------------------------------------------------
+   Review mode — ?review paints the assumption marks and reveals the
+   appendix. Both are inert without it.
+   --------------------------------------------------------------- */
+.block-appendix {
+  display: none;
+}
+
+[data-review] .block-appendix {
+  display: block;
+  margin-top: 34px;
+}
+
+[data-review] .asm {
+  background: var(--highlight);
+  box-shadow: 0 1px 0 var(--muted);
+}
+
 /* ---------------------------------------------------------------
    Mobile — single column, article as its own page.
    --------------------------------------------------------------- */
-@media (max-width: 809.98px) {
+@media (max-width: 999.98px) {
   .shell {
     display: block;
     max-width: none;
@@ -451,6 +1120,10 @@ a.entry:hover .entry-date {
     padding: 56px 24px 40px;
     border-left: none;
     border-right: none;
+    position: static;
+    height: auto;
+    overflow: visible;
+    --shift: 0px;
   }
 
   .article-slot {
@@ -461,6 +1134,14 @@ a.entry:hover .entry-date {
   .article {
     width: 100%;
     padding: 56px 24px 80px;
+  }
+
+  .article-body {
+    grid-template-columns: [content-start] minmax(0, 1fr) [content-end bleed-end];
+  }
+
+  .article-body > .bleed {
+    width: 100%;
   }
 
   /* On an article route the index steps out of the way entirely. */

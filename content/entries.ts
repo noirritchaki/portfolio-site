@@ -1,7 +1,12 @@
+import type { Block } from "./blocks";
+import { healthCheckup } from "./health-checkup";
+
 export type Entry = {
   /** Internal article route: /writing/<slug>. Omit for WIP or external entries. */
   slug?: string;
   title: string;
+  /** Full title for the article itself, when the index needs a shorter one. */
+  headline?: string;
   /** Year group heading, e.g. "2026". */
   year: string;
   /** Right-aligned marker, e.g. "18/03". Omitted for WIP entries. */
@@ -12,8 +17,10 @@ export type Entry = {
   wip?: boolean;
   /** Links out instead of opening an article. */
   href?: string;
-  /** Article body. A paragraph starting with "## " renders as a subheading. */
+  /** Short pieces: one string per paragraph, "## " prefix for a subheading. */
   body?: string[];
+  /** Long pieces with real structure. Takes precedence over `body`. */
+  blocks?: Block[];
 };
 
 export const entries: Entry[] = [
@@ -23,18 +30,13 @@ export const entries: Entry[] = [
     wip: true,
   },
   {
-    slug: "first-piece",
-    title: "First Piece",
+    slug: "health-checkup",
+    title: "Health Checkup",
+    headline: "Packages to questions",
     year: "2026",
-    date: "18/03",
-    published: "18 March, 2026",
-    body: [
-      "Opening paragraph. Set up the thing you built or the problem you kept running into, in two or three sentences. Placeholder text — replace this with your own.",
-      "## About the Project",
-      "One line on what the project is.",
-      "A longer paragraph on what it does and who it is for. Keep the register plain; the layout does the work here, so the writing does not have to perform.",
-      "A closing paragraph on what you learned, or what you would do differently. Placeholder text.",
-    ],
+    date: "—",
+    published: "August 2026",
+    blocks: healthCheckup,
   },
   {
     slug: "second-piece",

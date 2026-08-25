@@ -1,26 +1,32 @@
 import Link from "next/link";
-import type { Entry } from "@/content/entries";
+import ArticleBlocks from "./ArticleBlocks";
+import ReviewMode from "./ReviewMode";
 import RichText from "./RichText";
+import type { Entry } from "@/content/entries";
 
 export default function Article({ entry }: { entry: Entry }) {
   return (
     <article className="article">
-      <h2 className="article-title">{entry.title}</h2>
+      <h2 className="article-title">{entry.headline ?? entry.title}</h2>
       {entry.published && <p className="article-date">{entry.published}</p>}
 
-      <div className="article-body">
-        {entry.body?.map((block) =>
-          block.startsWith("## ") ? (
-            <h3 className="article-heading" key={block}>
-              {block.slice(3)}
-            </h3>
-          ) : (
-            <p key={block}>
-              <RichText text={block} />
-            </p>
-          ),
+      <ReviewMode>
+        {entry.blocks ? (
+          <ArticleBlocks blocks={entry.blocks} />
+        ) : (
+          entry.body?.map((block) =>
+            block.startsWith("## ") ? (
+              <h3 className="block-heading" key={block}>
+                {block.slice(3)}
+              </h3>
+            ) : (
+              <p key={block}>
+                <RichText text={block} />
+              </p>
+            ),
+          )
         )}
-      </div>
+      </ReviewMode>
 
       <Link className="back" href="/">
         ← Back
