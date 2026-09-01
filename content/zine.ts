@@ -15,6 +15,6 @@ export type Spread = {
 /** Spreads run in order and loop, so the last one turns back to the first. */
 export const zine: Spread[] = [
   { src: "/zine/page1.png", width: 1456, height: 1011, title: "Equilibrium Climbing" },
-  { src: "/zine/page1.png", width: 1456, height: 1011, title: "Equilibrium Climbing" },
+  { src: "/zine/page2.png", width: 1456, height: 1011, title: "Frank Anthony Public School" },
   { src: "/zine/page1.png", width: 1456, height: 1011, title: "Equilibrium Climbing" },
 ];
