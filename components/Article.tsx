@@ -28,7 +28,7 @@ export default function Article({ entry }: { entry: Entry }) {
         )}
       </ReviewMode>
 
-      <Link className="back" href="/">
+      <Link className="article-back" href="/">
         ← Back
       </Link>
     </article>

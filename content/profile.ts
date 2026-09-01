@@ -2,6 +2,9 @@ export const profile = {
   name: "Noirrit",
   avatar: "/avatar.jpg",
 
+  /** Small button in the top corner of the column. */
+  zine: { label: "life zine", href: "/zine" },
+
   /**
    * Each string is one paragraph. Inline formatting (see components/RichText):
    *   [label](https://url)          → link

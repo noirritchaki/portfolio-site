@@ -2,6 +2,8 @@
 
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import Overlay from "./Overlay";
 import Sidebar from "./Sidebar";
 
 /**
@@ -14,13 +16,29 @@ import Sidebar from "./Sidebar";
  */
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // Two different ways a route can present: beside the index, or over it.
   const reading = pathname.startsWith("/writing/");
+  const overlay = pathname.startsWith("/zine");
   const activeSlug = reading ? pathname.split("/").pop() : undefined;
+
+  // Tied to the route, not to the overlay component: the overlay stays mounted
+  // while it fades out, so unlocking on its unmount would leave the page stuck
+  // if that animation never finished.
+  useEffect(() => {
+    if (!overlay) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [overlay]);
 
   return (
     <MotionConfig reducedMotion="user">
-      <main className="shell" data-reading={reading}>
-        <Sidebar activeSlug={activeSlug} />
+      <main className="shell" data-reading={reading} data-blurred={overlay}>
+        <Sidebar reading={reading} activeSlug={activeSlug} />
 
         {/*
           popLayout takes the exiting article out of the flow while it fades.
@@ -48,6 +66,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Outside .shell so the backdrop blur does not catch its own panel. */}
+      <AnimatePresence>
+        {overlay && (
+          <motion.div
+            key="overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            <Overlay label="Life zine">{children}</Overlay>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </MotionConfig>
   );
 }

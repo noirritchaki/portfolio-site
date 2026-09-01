@@ -18,9 +18,21 @@ import RichText, { parseReveal } from "./RichText";
  * leaving the column stuck on one side. The offset here is a known constant,
  * (shell 1000px − sidebar 372px) / 2, so there is nothing to measure.
  */
-export default function Sidebar({ activeSlug }: { activeSlug?: string }) {
+export default function Sidebar({
+  reading,
+  activeSlug,
+}: {
+  reading: boolean;
+  activeSlug?: string;
+}) {
   return (
-    <aside className="sidebar" data-reading={Boolean(activeSlug)}>
+    <aside className="sidebar" data-reading={reading}>
+      <div className="sidebar-top">
+        <Link className="zine-button" href={profile.zine.href}>
+          {profile.zine.label}
+        </Link>
+      </div>
+
       <Link href="/" aria-label={`${profile.name} — home`}>
         <Image
           className="avatar"

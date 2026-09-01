@@ -126,7 +126,7 @@ img {
 .sidebar {
   flex: 0 0 var(--sidebar);
   width: var(--sidebar);
-  padding: 100px 32px 20px;
+  padding: 34px 32px 20px;
   border-left: 0.5px solid var(--line);
   border-right: 0.5px solid var(--line);
   transition: transform 500ms cubic-bezier(0.32, 0.72, 0, 1),
@@ -143,6 +143,69 @@ img {
 
 .sidebar::-webkit-scrollbar {
   display: none;
+}
+
+.sidebar-top {
+  display: flex;
+  justify-content: flex-end;
+  /* 34px inset + 23px button + this = the 100px the avatar sat at before. */
+  margin-bottom: 43px;
+}
+
+/*
+ * The "life zine" button. Named -button rather than .zine because the book
+ * container at /zine uses .zine — sharing the name put this border, fill and
+ * shine sweep on the book itself.
+ */
+.zine-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+  padding: 3px 9px;
+  border: 0.5px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.06em;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+
+/*
+ * A glint that crosses the button every few seconds. Most of the cycle is
+ * spent parked off the left edge, so it reads as an occasional catch of light
+ * rather than a running animation — this is the one button on a very quiet
+ * page, and a constant shimmer would be louder than the page can carry.
+ */
+.zine-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    var(--highlight) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: zine-shine 5s ease-in-out infinite;
+}
+
+@keyframes zine-shine {
+  0%,
+  72% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+.zine-button:hover {
+  color: var(--fg);
+  border-color: var(--muted);
 }
 
 .avatar {
@@ -417,7 +480,10 @@ a.entry:hover .entry-date {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dot {
+  .dot,
+  .zine-button::after,
+  .zine-flap,
+  .zine-caption {
     animation: none;
   }
 
@@ -505,7 +571,7 @@ a.entry:hover .entry-date {
   color: var(--fg);
 }
 
-.back {
+.article-back {
   display: none;
 }
 
@@ -1105,6 +1171,238 @@ a.entry:hover .entry-date {
   box-shadow: 0 1px 0 var(--muted);
 }
 
+
+/* ---------------------------------------------------------------
+   The zine — a book of spreads at /zine. Photo on the left page, a
+   note on the right; clicking a page turns it, and it loops.
+   --------------------------------------------------------------- */
+/* The overlay this opens in lives outside .shell — see components/Overlay. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.45);
+  /* Prefixed first: the unprefixed declaration must come last so it wins. */
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+}
+
+.overlay-panel {
+  outline: none;
+}
+
+.overlay-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.overlay-close:hover {
+  color: var(--fg);
+}
+
+/*
+ * Fallback for browsers without backdrop-filter: blur the page itself. Not the
+ * default, because filtering .shell would also blur anything rendered inside
+ * it and creates a containing block that breaks the sticky index.
+ */
+@supports not (backdrop-filter: blur(1px)) {
+  .shell[data-blurred="true"] {
+    filter: blur(7px);
+  }
+}
+
+.zine {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+}
+
+.zine-book {
+  position: relative;
+  /* Aspect ratio is set inline from the spread's own pixel size. */
+  height: min(46vh, 48vw);
+  width: auto;
+  /* Shallow enough that the fold reads as a page and not a swinging door. */
+  perspective: 2600px;
+  /* A slight lean, so it reads as a book set down rather than a diagram. */
+  transform: rotate(-2.5deg);
+}
+
+.zine-full {
+  position: absolute;
+  inset: 0;
+}
+
+.zine-full img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/*
+ * A half is a window onto the same spread image: the image is drawn at twice
+ * the half's width, and the right half slides it fully left, so each window
+ * shows its own side of the spine.
+ */
+.zine-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  overflow: clip visible;
+}
+
+.zine-half.is-left {
+  left: 0;
+}
+
+.zine-half.is-right {
+  left: 50%;
+}
+
+.zine-half-img {
+  width: 200%;
+  max-width: none;
+  height: auto;
+  display: block;
+}
+
+.zine-half-img.is-right {
+  margin-left: -100%;
+}
+
+/* The outgoing half holds until the flap has nearly landed; the incoming one
+   fades up beneath it, so the swap never shows as a hard cut. */
+.zine-half.is-out {
+  animation: zine-fade-out 220ms ease-out 600ms forwards;
+}
+
+.zine-half.is-in {
+  opacity: 0;
+  animation: zine-fade-in 400ms ease forwards;
+}
+
+@keyframes zine-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes zine-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- the turning page ---- */
+.zine-flap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 5;
+  transform-style: preserve-3d;
+  animation-duration: 850ms;
+  animation-timing-function: cubic-bezier(0.42, 0.05, 0.25, 1);
+  animation-fill-mode: forwards;
+  will-change: transform;
+}
+
+.zine-flap.is-next {
+  left: 50%;
+  transform-origin: left center;
+  animation-name: zine-fold-next;
+}
+
+.zine-flap.is-prev {
+  left: 0;
+  transform-origin: right center;
+  animation-name: zine-fold-prev;
+}
+
+@keyframes zine-fold-next {
+  to {
+    transform: rotateY(-180deg);
+  }
+}
+
+@keyframes zine-fold-prev {
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+/*
+ * Modifier classes here are all `is-` prefixed on purpose. A bare `back` on
+ * the flap's reverse face collided with the article's `.back { display: none }`
+ * link, which hid it — so past 90° the fold showed nothing at all.
+ */
+.zine-face {
+  position: absolute;
+  inset: 0;
+  overflow: clip visible;
+  backface-visibility: hidden;
+}
+
+.zine-face.is-back {
+  transform: rotateY(180deg);
+}
+
+/* ---- click targets: each half turns in its own direction ---- */
+.zine-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 60;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.zine-zone.is-prev {
+  left: 0;
+}
+
+.zine-zone.is-next {
+  right: 0;
+}
+
+.zine-zone:focus-visible {
+  outline: 1px solid var(--fg);
+  outline-offset: -3px;
+}
+
+.zine-caption {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  animation: zine-cap-in 500ms ease both;
+}
+
+@keyframes zine-cap-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* ---------------------------------------------------------------
    Mobile — single column, article as its own page.
    --------------------------------------------------------------- */
@@ -1117,13 +1415,17 @@ a.entry:hover .entry-date {
   .sidebar {
     width: 100%;
     flex: none;
-    padding: 56px 24px 40px;
+    padding: 20px 24px 40px;
     border-left: none;
     border-right: none;
     position: static;
     height: auto;
     overflow: visible;
     --shift: 0px;
+  }
+
+  .sidebar-top {
+    margin-bottom: 12px;
   }
 
   .article-slot {
@@ -1134,6 +1436,14 @@ a.entry:hover .entry-date {
   .article {
     width: 100%;
     padding: 56px 24px 80px;
+  }
+
+  /* Sized from width here: the spread is wide, and the phone is not.
+     Trimmed to leave room for the tilt — a rotated box's bounding width is
+     wider than the element, and at 88vw it reached the screen edge. */
+  .zine-book {
+    height: auto;
+    width: 82vw;
   }
 
   .article-body {
@@ -1149,7 +1459,7 @@ a.entry:hover .entry-date {
     display: none;
   }
 
-  .back {
+  .article-back {
     display: block;
     margin-top: 44px;
     color: var(--muted);

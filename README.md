@@ -109,6 +109,91 @@ Two things to know when writing one:
 
 The same markup works in article bodies in `content/entries.ts`.
 
+## The zine
+
+`/zine` is a book of spreads: a photo on the left page, a note on the right.
+Clicking a page turns it in that direction, and the sequence loops.
+
+It opens as an **overlay** over the rest of the site rather than in the article
+column — the page behind is blurred and the book is centred on the viewport.
+Close with Escape, the × in the corner, or a click on the backdrop; all three
+return to `/`.
+
+Each entry in `content/zine.ts` is **one image of the whole spread** — both
+pages and the spine, exactly as the book looks open flat. The book splits it
+down the middle itself:
+
+```ts
+{
+  src: "/zine/kyoto.png",
+  width: 1456,          // intrinsic size; sets the book's aspect ratio,
+  height: 1033,         // so it has to be right
+  title: "Kyoto",       // caption under the book
+}
+```
+
+Images go in `public/zine/`. Spreads run in array order and wrap around, so
+the last turns forward to the first.
+
+`public/zine/page1.png` is currently listed three times so page turns can be
+previewed. Replace the repeats with real spreads as you make them.
+
+Export spreads with their own drop shadow on transparency, as `page1.png`
+does — the book deliberately has no CSS shadow of its own, so one baked into
+the artwork would otherwise double up.
+
+### The overlay
+
+`components/Overlay.tsx` renders *outside* `.shell`, which matters: the blur is
+a `backdrop-filter`, and an element cannot blur a backdrop it is itself part
+of. A `@supports` fallback filters `.shell` directly for browsers without
+`backdrop-filter`, but that is not the default — filtering `.shell` creates a
+containing block that breaks the sticky index.
+
+Note the declaration order in `.overlay`: `-webkit-backdrop-filter` must come
+*before* the unprefixed `backdrop-filter`. With the order reversed the CSS
+pipeline drops the unprefixed one entirely and no blur is applied at all.
+
+The scroll lock lives in `Shell`, keyed on the route, not in `Overlay` keyed on
+its own lifetime. The overlay stays mounted while it fades out, so releasing
+the lock on unmount would leave the page unscrollable for the length of that
+animation — or permanently, if the animation never completed.
+
+### How the turn works
+
+Each half is a window onto the same spread image: the image is drawn at twice
+the half's width, and the right half slides it fully left, so each window shows
+its own side of the spine. That is why one file can serve as two pages.
+
+Turning forward folds the right half over the centre; its back face carries the
+left half of the *next* spread, while that spread's right half sits beneath and
+is revealed as the flap lifts. `backface-visibility: hidden` swaps which face
+you see as it passes 90°. Turning back mirrors it.
+
+One convention worth keeping: every modifier class inside the zine is `is-`
+prefixed (`is-back`, `is-next`, `is-left`). That is not style preference. A
+bare `back` on the flap's reverse face collided with the article's
+`.back { display: none }` link and hid it outright, so the fold showed nothing
+at all past 90°. The same thing happened once with `.zine` itself, which the
+book container and the sidebar button both used — the button's border and
+shine sweep ended up drawn on the book.
+
+Three details that are load-bearing:
+
+- **Flips are interruptible.** A click mid-turn finalises the fold in flight
+  and starts the next from where it landed, so an impatient reader's clicks all
+  register instead of being dropped.
+- **The flap is keyed by flip id**, so the CSS animations restart on every
+  turn — including a turn that interrupts another.
+- **`onAnimationEnd` checks `e.target === e.currentTarget`.** The half
+  cross-fades are animations too and they bubble to the same handler; without
+  the guard a fade would end the turn early.
+
+The turn completes on the flap's `animationend`, with a timed backstop just
+past the animation duration for when that event never arrives — a backgrounded
+tab, or reduced motion, where the flap has no animation at all and would
+otherwise wait forever for an event that is never coming.
+
 ## Layout and transitions
 
 The home page centers the column in the viewport. Opening an entry slides the
